@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>成份翻譯機</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="container">
+      <h1>成份翻譯機</h1>
+      <p class="hint">上傳最新成分翻譯對照表（CSV / TSV / XLSX 或 JSON），系統會自動以最新版進行翻譯。</p>
+
+      <section class="card">
+        <h2>1) 上傳對照表</h2>
+        <input id="tableFile" type="file" accept=".csv,.tsv,.txt,.xlsx,.xls,.json" />
+        <button id="uploadBtn" type="button">上傳並設為最新版</button>
+        <p id="uploadStatus" class="status" aria-live="polite"></p>
+      </section>
+
+      <section class="card">
+        <h2>2) 翻譯設定</h2>
+        <div class="row">
+          <label for="versionSelect">使用版本：</label>
+          <select id="versionSelect"></select>
+        </div>
+        <div class="row">
+          <label for="langSelect">目標語言：</label>
+          <select id="langSelect"></select>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>3) 輸入內容</h2>
+        <label for="inputText">輸入成份或分析值（可用換行、逗號、頓號分隔；括號內不拆分）</label>
+        <textarea id="inputText" rows="8" placeholder="例如：\nProtein\nCrude Fat\nMoisture"></textarea>
+        <button id="translateBtn" type="button">開始翻譯</button>
+      </section>
+
+      <section class="card">
+        <h2>翻譯結果</h2>
+        <pre id="outputText"></pre>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>
