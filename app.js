@@ -39,8 +39,24 @@ function splitInput(text) {
 
   const result = [];
   let current = "";
-  let parenDepth = 0;
-  let bracketDepth = 0;
+  const bracketPairs = {
+    "(": ")",
+    "（": "）",
+    "[": "]",
+    "［": "］",
+    "{": "}",
+    "｛": "｝",
+    "<": ">",
+    "＜": "＞",
+    "〈": "〉",
+    "《": "》",
+    "「": "」",
+    "『": "』",
+    "【": "】"
+  };
+  const openingBrackets = new Set(Object.keys(bracketPairs));
+  const closingBrackets = new Set(Object.values(bracketPairs));
+  const bracketStack = [];
 
   const pushCurrent = () => {
     const token = current.trim().replace(/^[\s、，,;；]+|[\s、，,;；]+$/g, "");
@@ -49,15 +65,22 @@ function splitInput(text) {
   };
 
   for (const char of input) {
-    if (char === "(" || char === "（") parenDepth += 1;
-    if (char === ")" || char === "）") parenDepth = Math.max(0, parenDepth - 1);
-    if (char === "[" || char === "【") bracketDepth += 1;
-    if (char === "]" || char === "】") bracketDepth = Math.max(0, bracketDepth - 1);
+    if (openingBrackets.has(char)) {
+      bracketStack.push(bracketPairs[char]);
+      current += char;
+      continue;
+    }
+
+    if (closingBrackets.has(char)) {
+      if (bracketStack.length && bracketStack[bracketStack.length - 1] === char) {
+        bracketStack.pop();
+      }
+      current += char;
+      continue;
+    }
 
     const isSeparator = /[\n,，、;；]/.test(char);
-    const isTopLevel = parenDepth === 0 && bracketDepth === 0;
-
-    if (isSeparator && isTopLevel) {
+    if (isSeparator && bracketStack.length === 0) {
       pushCurrent();
       continue;
     }
@@ -490,6 +513,13 @@ function findRowByAnyColumn(rows, input) {
   );
 }
 
+function getOutputJoiner(targetLanguage) {
+  const key = String(targetLanguage || "").toLowerCase();
+  if (key.includes("en") || key.includes("english") || key.includes("英文")) return ", ";
+  if (key.includes("ja") || key.includes("jp") || key.includes("japanese") || key.includes("日文")) return "、";
+  return "、";
+}
+
 function handleTranslate() {
   const selectedVersion = getSelectedVersion();
   const targetLanguage = langSelect.value;
@@ -510,18 +540,14 @@ function handleTranslate() {
     return;
   }
 
-  const translated = items.map((item) => {
+  const translatedItems = items.map((item) => {
     const row = findRowByAnyColumn(selectedVersion.rows, item);
     const target = row?.[targetLanguage];
-
-    if (!target) {
-      return `${item} => （未找到翻譯）`;
-    }
-
-    return `${item} => ${target}`;
+    return target ? String(target).trim() : `${item}（未找到翻譯）`;
   });
 
-  outputText.textContent = translated.join("\n");
+  const joiner = getOutputJoiner(targetLanguage);
+  outputText.textContent = translatedItems.join(joiner);
 }
 
 uploadBtn.addEventListener("click", handleUpload);
