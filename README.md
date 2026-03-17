@@ -41,3 +41,9 @@ python3 server.py
 鮭魚	Salmon	サーモン
 粗蛋白（以上）	Crude Protein (min.)	タンパク質（以上）
 ```
+
+## 常見錯誤排除
+
+- 若看到 `上傳失敗：Unexpected token '<' ... is not valid JSON`，代表你可能用錯啟動方式（例如 `python3 -m http.server`）。
+- 請改用：`python3 server.py`。
+

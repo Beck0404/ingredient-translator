@@ -141,7 +141,20 @@ async function parseXLSX(file) {
     body: formData
   });
 
-  const payload = await response.json();
+  const contentType = response.headers.get("content-type") || "";
+  const rawText = await response.text();
+
+  if (!contentType.includes("application/json")) {
+    throw new Error("XLSX 上傳需要使用 `python3 server.py` 啟動服務（目前回應非 JSON）");
+  }
+
+  let payload;
+  try {
+    payload = JSON.parse(rawText);
+  } catch {
+    throw new Error("XLSX 解析服務回應格式錯誤，請改用 `python3 server.py` 啟動");
+  }
+
   if (!response.ok) {
     throw new Error(payload.error || "XLSX 解析失敗");
   }
