@@ -1,0 +1,85 @@
+:root {
+  color-scheme: light;
+  font-family: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+}
+
+body {
+  margin: 0;
+  background: #f5f7fb;
+  color: #222;
+}
+
+.container {
+  max-width: 900px;
+  margin: 2rem auto;
+  padding: 0 1rem 2rem;
+}
+
+h1 {
+  margin-bottom: 0.5rem;
+}
+
+.hint {
+  margin-top: 0;
+  color: #4f5d75;
+}
+
+.card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 1rem;
+  margin: 1rem 0;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.06);
+}
+
+.row {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  margin: 0.75rem 0;
+}
+
+label {
+  min-width: 110px;
+}
+
+select,
+input[type="file"],
+textarea,
+button {
+  font: inherit;
+}
+
+select,
+textarea {
+  width: 100%;
+  padding: 0.5rem;
+}
+
+button {
+  margin-top: 0.75rem;
+  background: #3257ff;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 0.5rem 0.9rem;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #2547e5;
+}
+
+.status {
+  min-height: 1.5rem;
+  margin-bottom: 0;
+}
+
+pre {
+  white-space: pre-wrap;
+  background: #f9fafc;
+  border: 1px solid #e3e7ef;
+  border-radius: 8px;
+  padding: 0.75rem;
+  min-height: 80px;
+}
