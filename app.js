@@ -35,8 +35,8 @@ function normalizeText(text) {
 
 function splitInput(text) {
   return text
-    .split(/[\n,]/)
-    .map((item) => item.trim())
+    .split(/[\n,，、;；]/)
+    .map((item) => item.trim().replace(/^[\s、，,;；]+|[\s、，,;；]+$/g, ""))
     .filter(Boolean);
 }
 
