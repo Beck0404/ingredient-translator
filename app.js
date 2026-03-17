@@ -34,10 +34,39 @@ function normalizeText(text) {
 }
 
 function splitInput(text) {
-  return text
-    .split(/[\n,，、;；]/)
-    .map((item) => item.trim().replace(/^[\s、，,;；]+|[\s、，,;；]+$/g, ""))
-    .filter(Boolean);
+  const input = String(text ?? "").trim();
+  if (!input) return [];
+
+  const result = [];
+  let current = "";
+  let parenDepth = 0;
+  let bracketDepth = 0;
+
+  const pushCurrent = () => {
+    const token = current.trim().replace(/^[\s、，,;；]+|[\s、，,;；]+$/g, "");
+    if (token) result.push(token);
+    current = "";
+  };
+
+  for (const char of input) {
+    if (char === "(" || char === "（") parenDepth += 1;
+    if (char === ")" || char === "）") parenDepth = Math.max(0, parenDepth - 1);
+    if (char === "[" || char === "【") bracketDepth += 1;
+    if (char === "]" || char === "】") bracketDepth = Math.max(0, bracketDepth - 1);
+
+    const isSeparator = /[\n,，、;；]/.test(char);
+    const isTopLevel = parenDepth === 0 && bracketDepth === 0;
+
+    if (isSeparator && isTopLevel) {
+      pushCurrent();
+      continue;
+    }
+
+    current += char;
+  }
+
+  pushCurrent();
+  return result;
 }
 
 function getLatestVersion(versions) {
