@@ -136,31 +136,45 @@ async function parseXLSX(file) {
   const formData = new FormData();
   formData.append("file", file, file.name);
 
-  const response = await fetch("/api/parse-xlsx", {
-    method: "POST",
-    body: formData
-  });
+  const endpoints = ["/api/parse-xlsx", "api/parse-xlsx"];
+  const errors = [];
 
-  const contentType = response.headers.get("content-type") || "";
-  const rawText = await response.text();
+  for (const endpoint of endpoints) {
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        body: formData
+      });
 
-  if (!contentType.includes("application/json")) {
-    throw new Error("XLSX 上傳需要使用 `python3 server.py` 啟動服務（目前回應非 JSON）");
+      const contentType = response.headers.get("content-type") || "";
+      const rawText = await response.text();
+
+      if (!contentType.includes("application/json")) {
+        errors.push(`${endpoint}: non-json response`);
+        continue;
+      }
+
+      let payload;
+      try {
+        payload = JSON.parse(rawText);
+      } catch {
+        errors.push(`${endpoint}: invalid json`);
+        continue;
+      }
+
+      if (!response.ok) {
+        throw new Error(payload.error || "XLSX 解析失敗");
+      }
+
+      return payload;
+    } catch (error) {
+      errors.push(`${endpoint}: ${error.message}`);
+    }
   }
 
-  let payload;
-  try {
-    payload = JSON.parse(rawText);
-  } catch {
-    throw new Error("XLSX 解析服務回應格式錯誤，請改用 `python3 server.py` 啟動");
-  }
-
-  if (!response.ok) {
-    throw new Error(payload.error || "XLSX 解析失敗");
-  }
-
-  return payload;
+  throw new Error(`XLSX 上傳需要使用 python3 server.py 啟動服務（${errors.join("; ")}）`);
 }
+
 function parseJSON(content) {
   const data = JSON.parse(content);
   if (!Array.isArray(data) || data.length === 0) {
@@ -272,7 +286,12 @@ async function handleUpload() {
     versionSelect.value = newVersion.id;
     refreshLanguageOptions();
   } catch (error) {
-    uploadStatus.textContent = `上傳失敗：${error.message}`;
+    const message = String(error?.message || "未知錯誤");
+    if (message.includes("Unexpected token '<'")) {
+      uploadStatus.textContent = "上傳失敗：請使用 `python3 server.py` 啟動，不可使用純靜態伺服器。";
+      return;
+    }
+    uploadStatus.textContent = `上傳失敗：${message}`;
   }
 }
 
