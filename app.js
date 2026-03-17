@@ -100,30 +100,176 @@ function parseDelimited(content, delimiter) {
 }
 
 
-function parseXLSXInBrowser(arrayBuffer) {
-  const workbook = globalThis.XLSX.read(arrayBuffer, { type: "array" });
-  const firstSheetName = workbook.SheetNames[0];
+function parseXml(text) {
+  return new DOMParser().parseFromString(text, "application/xml");
+}
 
-  if (!firstSheetName) {
-    throw new Error("XLSX 檔案沒有可用工作表");
+function getCellText(cell, sharedStrings) {
+  const cellType = cell.getAttribute("t");
+
+  if (cellType === "s") {
+    const v = cell.querySelector("v")?.textContent || "";
+    const idx = Number(v);
+    return Number.isInteger(idx) ? sharedStrings[idx] || "" : "";
   }
 
-  const worksheet = workbook.Sheets[firstSheetName];
-  const rows = globalThis.XLSX.utils.sheet_to_json(worksheet, {
-    defval: "",
-    raw: false
+  if (cellType === "inlineStr") {
+    return cell.querySelector("is t")?.textContent || "";
+  }
+
+  return cell.querySelector("v")?.textContent || "";
+}
+
+function parseCellRef(ref) {
+  const letters = (ref.match(/^[A-Z]+/i) || [""])[0].toUpperCase();
+  let col = 0;
+
+  for (const ch of letters) {
+    col = col * 26 + (ch.charCodeAt(0) - 64);
+  }
+
+  return Math.max(0, col - 1);
+}
+
+function parseWorksheetXml(sheetText, sharedStrings) {
+  const sheetDoc = parseXml(sheetText);
+  const rows = [];
+
+  sheetDoc.querySelectorAll("sheetData > row").forEach((rowNode) => {
+    const row = {};
+
+    rowNode.querySelectorAll("c").forEach((cell) => {
+      const ref = cell.getAttribute("r") || "";
+      const colIdx = parseCellRef(ref);
+      row[colIdx] = getCellText(cell, sharedStrings).trim();
+    });
+
+    if (Object.keys(row).length) rows.push(row);
   });
 
   if (!rows.length) {
     throw new Error("XLSX 工作表內容為空");
   }
 
-  const headers = Object.keys(rows[0]);
+  const headerMap = rows[0];
+  const sortedKeys = Object.keys(headerMap).map(Number).sort((a, b) => a - b);
+  const headers = sortedKeys.map((idx) => headerMap[idx]).filter(Boolean);
+
   if (headers.length < 2) {
     throw new Error("XLSX 至少需要兩個欄位");
   }
 
-  return { headers, rows };
+  const dataRows = rows.slice(1).map((raw) => {
+    const mapped = {};
+    sortedKeys.forEach((idx) => {
+      const header = headerMap[idx];
+      if (!header) return;
+      mapped[header] = raw[idx] || "";
+    });
+    return mapped;
+  }).filter((row) => Object.values(row).some((v) => String(v).trim()));
+
+  return { headers, rows: dataRows };
+}
+
+function readUInt16(view, offset) {
+  return view.getUint16(offset, true);
+}
+
+function readUInt32(view, offset) {
+  return view.getUint32(offset, true);
+}
+
+function findEocd(view) {
+  for (let i = view.byteLength - 22; i >= Math.max(0, view.byteLength - 65557); i -= 1) {
+    if (readUInt32(view, i) === 0x06054b50) return i;
+  }
+  throw new Error("XLSX 檔案格式錯誤（找不到 ZIP 結尾）");
+}
+
+async function inflateDeflateRaw(bytes) {
+  if (typeof DecompressionStream !== "function") {
+    throw new Error("此瀏覽器不支援離線 XLSX 解析，請改用 server.py");
+  }
+
+  const ds = new DecompressionStream("deflate-raw");
+  const decompressedStream = new Blob([bytes]).stream().pipeThrough(ds);
+  const outBuffer = await new Response(decompressedStream).arrayBuffer();
+  return new Uint8Array(outBuffer);
+}
+
+async function unzipEntries(arrayBuffer) {
+  const view = new DataView(arrayBuffer);
+  const decoder = new TextDecoder("utf-8");
+  const eocdOffset = findEocd(view);
+  const totalEntries = readUInt16(view, eocdOffset + 10);
+  const centralDirOffset = readUInt32(view, eocdOffset + 16);
+
+  const entries = new Map();
+  let ptr = centralDirOffset;
+
+  for (let i = 0; i < totalEntries; i += 1) {
+    if (readUInt32(view, ptr) !== 0x02014b50) {
+      throw new Error("XLSX 檔案格式錯誤（中央目錄）");
+    }
+
+    const compression = readUInt16(view, ptr + 10);
+    const compressedSize = readUInt32(view, ptr + 20);
+    const fileNameLen = readUInt16(view, ptr + 28);
+    const extraLen = readUInt16(view, ptr + 30);
+    const commentLen = readUInt16(view, ptr + 32);
+    const localHeaderOffset = readUInt32(view, ptr + 42);
+
+    const fileNameBytes = new Uint8Array(arrayBuffer, ptr + 46, fileNameLen);
+    const fileName = decoder.decode(fileNameBytes);
+
+    const localSig = readUInt32(view, localHeaderOffset);
+    if (localSig !== 0x04034b50) {
+      throw new Error("XLSX 檔案格式錯誤（本地檔頭）");
+    }
+
+    const localNameLen = readUInt16(view, localHeaderOffset + 26);
+    const localExtraLen = readUInt16(view, localHeaderOffset + 28);
+    const dataStart = localHeaderOffset + 30 + localNameLen + localExtraLen;
+    const compressedBytes = new Uint8Array(arrayBuffer.slice(dataStart, dataStart + compressedSize));
+
+    let plainBytes;
+    if (compression === 0) {
+      plainBytes = compressedBytes;
+    } else if (compression === 8) {
+      plainBytes = await inflateDeflateRaw(compressedBytes);
+    } else {
+      throw new Error(`XLSX 壓縮格式不支援（method=${compression}）`);
+    }
+
+    entries.set(fileName, decoder.decode(plainBytes));
+
+    ptr += 46 + fileNameLen + extraLen + commentLen;
+  }
+
+  return entries;
+}
+
+function parseSharedStringsXml(xmlText) {
+  if (!xmlText) return [];
+  const doc = parseXml(xmlText);
+  return Array.from(doc.querySelectorAll("si")).map((si) =>
+    Array.from(si.querySelectorAll("t")).map((t) => t.textContent || "").join("")
+  );
+}
+
+async function parseXLSXInBrowser(arrayBuffer) {
+  const zipEntries = await unzipEntries(arrayBuffer);
+  const sheetName = Array.from(zipEntries.keys()).find((name) =>
+    /^xl\/worksheets\/sheet\d+\.xml$/i.test(name)
+  );
+
+  if (!sheetName) {
+    throw new Error("XLSX 檔案沒有可用工作表");
+  }
+
+  const sharedStrings = parseSharedStringsXml(zipEntries.get("xl/sharedStrings.xml") || "");
+  return parseWorksheetXml(zipEntries.get(sheetName), sharedStrings);
 }
 
 function buildApiCandidates() {
@@ -141,50 +287,50 @@ function buildApiCandidates() {
 async function parseXLSX(file) {
   const buffer = await file.arrayBuffer();
 
-  if (globalThis.XLSX) {
-    return parseXLSXInBrowser(buffer);
-  }
+  try {
+    return await parseXLSXInBrowser(buffer);
+  } catch (browserError) {
+    const formData = new FormData();
+    formData.append("file", file, file.name);
 
-  const formData = new FormData();
-  formData.append("file", file, file.name);
+    const endpoints = buildApiCandidates();
+    const errors = [`browser: ${browserError.message}`];
 
-  const endpoints = buildApiCandidates();
-  const errors = [];
-
-  for (const endpoint of endpoints) {
-    try {
-      const response = await fetch(endpoint, {
-        method: "POST",
-        body: formData
-      });
-
-      const contentType = response.headers.get("content-type") || "";
-      const rawText = await response.text();
-
-      if (!contentType.includes("application/json")) {
-        errors.push(`${endpoint}: non-json response`);
-        continue;
-      }
-
-      let payload;
+    for (const endpoint of endpoints) {
       try {
-        payload = JSON.parse(rawText);
-      } catch {
-        errors.push(`${endpoint}: invalid json`);
-        continue;
-      }
+        const response = await fetch(endpoint, {
+          method: "POST",
+          body: formData
+        });
 
-      if (!response.ok) {
-        throw new Error(payload.error || "XLSX 解析失敗");
-      }
+        const contentType = response.headers.get("content-type") || "";
+        const rawText = await response.text();
 
-      return payload;
-    } catch (error) {
-      errors.push(`${endpoint}: ${error.message}`);
+        if (!contentType.includes("application/json")) {
+          errors.push(`${endpoint}: non-json response`);
+          continue;
+        }
+
+        let payload;
+        try {
+          payload = JSON.parse(rawText);
+        } catch {
+          errors.push(`${endpoint}: invalid json`);
+          continue;
+        }
+
+        if (!response.ok) {
+          throw new Error(payload.error || "XLSX 解析失敗");
+        }
+
+        return payload;
+      } catch (error) {
+        errors.push(`${endpoint}: ${error.message}`);
+      }
     }
-  }
 
-  throw new Error(`XLSX 上傳需要使用 python3 server.py 啟動服務（${errors.join("; ")}）`);
+    throw new Error(`XLSX 解析失敗（${errors.join("; ")}）`);
+  }
 }
 
 function parseJSON(content) {
@@ -299,8 +445,8 @@ async function handleUpload() {
     refreshLanguageOptions();
   } catch (error) {
     const message = String(error?.message || "未知錯誤");
-    if (message.includes("Unexpected token '<'")) {
-      uploadStatus.textContent = "上傳失敗：請使用 `python3 server.py` 啟動，不可使用純靜態伺服器。";
+    if (message.includes("Unexpected token '<'") || message.includes("non-json response")) {
+      uploadStatus.textContent = "上傳失敗：XLSX 解析服務回應非 JSON。請改用 `python3 server.py` 或確認代理有轉發 `/api/parse-xlsx`。";
       return;
     }
     uploadStatus.textContent = `上傳失敗：${message}`;

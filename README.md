@@ -7,18 +7,24 @@
 - 輸入成份或分析值後，選擇目標語言，輸出對應翻譯。
 - 支援以中文、英文、日文任一語言詞條作為輸入來源。
 
-## 重要：預覽啟動方式（已修正）
+## 啟動方式
 
-請使用內建 `server.py` 啟動，而不是直接開啟 HTML 檔：
+可使用任一方式：
 
 ```bash
 python3 server.py
 ```
 
-原因：XLSX 需要透過 `/api/parse-xlsx` 在本機解析，這樣即使在無外網環境也能運作。
+或
 
-- 若預覽環境使用特殊路由前綴（例如代理路徑），伺服器也會自動回退到 `index.html`，避免出現 `Not Found`。
-- 若在帶有路徑前綴的預覽環境（例如 `/xxx/yyy`）中使用，系統會自動嘗試多種 `/api/parse-xlsx` 路徑。
+```bash
+python3 -m http.server 8000
+```
+
+說明：
+- 系統會優先使用瀏覽器內建 XLSX 解析（不依賴後端 API）。
+- 若瀏覽器不支援，才會 fallback 到 `/api/parse-xlsx`（此時請使用 `python3 server.py`）。
+- 若預覽環境有路徑前綴（例如 `/xxx/yyy`），系統也會自動嘗試多種 API 路徑。
 
 ## 建議對照表欄位
 
@@ -45,6 +51,6 @@ python3 server.py
 
 ## 常見錯誤排除
 
-- 若看到 `上傳失敗：Unexpected token '<' ... is not valid JSON`，代表你可能用錯啟動方式（例如 `python3 -m http.server`）。
-- 請改用：`python3 server.py`。
+- 若看到 `...non-json response...`，表示 fallback API 收到 HTML 而非 JSON。通常是預覽代理路徑或啟動方式造成。
+- 建議先直接用 `python3 server.py` 啟動再測試；若是代理預覽，請確認代理有正確轉發 POST 到 `/api/parse-xlsx`。
 
