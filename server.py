@@ -131,7 +131,8 @@ class Handler(SimpleHTTPRequestHandler):
         super().do_GET()
 
     def do_POST(self):  # noqa: N802
-        if self.path != "/api/parse-xlsx":
+        request_path = self.path.split("?", 1)[0]
+        if not request_path.endswith("/api/parse-xlsx"):
             self.send_error(404, "Not Found")
             return
 

@@ -126,6 +126,18 @@ function parseXLSXInBrowser(arrayBuffer) {
   return { headers, rows };
 }
 
+function buildApiCandidates() {
+  const candidates = ["/api/parse-xlsx", "api/parse-xlsx"];
+  const parts = window.location.pathname.split("/").filter(Boolean);
+
+  for (let i = parts.length; i >= 1; i -= 1) {
+    const prefix = `/${parts.slice(0, i).join("/")}`;
+    candidates.push(`${prefix}/api/parse-xlsx`);
+  }
+
+  return [...new Set(candidates)];
+}
+
 async function parseXLSX(file) {
   const buffer = await file.arrayBuffer();
 
@@ -136,7 +148,7 @@ async function parseXLSX(file) {
   const formData = new FormData();
   formData.append("file", file, file.name);
 
-  const endpoints = ["/api/parse-xlsx", "api/parse-xlsx"];
+  const endpoints = buildApiCandidates();
   const errors = [];
 
   for (const endpoint of endpoints) {

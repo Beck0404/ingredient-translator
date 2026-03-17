@@ -18,6 +18,7 @@ python3 server.py
 原因：XLSX 需要透過 `/api/parse-xlsx` 在本機解析，這樣即使在無外網環境也能運作。
 
 - 若預覽環境使用特殊路由前綴（例如代理路徑），伺服器也會自動回退到 `index.html`，避免出現 `Not Found`。
+- 若在帶有路徑前綴的預覽環境（例如 `/xxx/yyy`）中使用，系統會自動嘗試多種 `/api/parse-xlsx` 路徑。
 
 ## 建議對照表欄位
 
